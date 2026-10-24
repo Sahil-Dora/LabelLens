@@ -202,7 +202,7 @@ export const getIndianSwaps = (icmrFlags: string[], additives: AdditiveDetail[],
   if (hasHighRiskAdditives || flagsStr.includes('synthetic color')) {
     swaps.push({
       trigger: 'Synthetic Food Colors / Additives',
-      alternative: 'Traditional Homemade Snacks or Clean-Label Organic Brands',
+      alternative: 'Traditional Homemade Snacks or Clean-Label Brands',
       benefit: 'Zero artificial azo dyes and chemical preservatives.'
     });
   }
@@ -228,7 +228,7 @@ export const checkAllergenProfile = (product: any, ingredientsText: string = '',
     warnings.push(`🔴 Diabetic Alert: Contains notable sugar (${sugar > 0 ? sugar.toFixed(1) + 'g/100g' : 'present'}) or sweeteners.`);
   }
   if (profile === 'Vegan' && (fullText.includes('milk') || fullText.includes('butter') || fullText.includes('honey') || fullText.includes('whey') || fullText.includes('casein') || fullText.includes('ghee'))) {
-    warnings.push(`🔴 Vegan Alert: Contains dairy or animal-derived ingredients (milk/butter/whey/ghee).`);
+    warnings.push(`🔴 Vegan Alert: Contains dairy or animal-derived ingredients.`);
   }
   if (profile === 'Jain' && (fullText.includes('onion') || fullText.includes('garlic') || fullText.includes('potato') || fullText.includes('carrot') || fullText.includes('ginger'))) {
     warnings.push(`🔴 Jain Alert: Contains root vegetables, onion, or garlic.`);
