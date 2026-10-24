@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { decodeAdditive, checkICMRGuidelines } from './src/utils/healthRules';
@@ -8,6 +8,7 @@ export default function App() {
   const [scannedData, setScannedData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const processingRef = useRef(false);
 
   if (!permission) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>;
@@ -25,30 +26,46 @@ export default function App() {
   }
 
   const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
-    if (loading || scannedData) return;
+    if (processingRef.current || loading || scannedData) return;
+    processingRef.current = true;
     setLoading(true);
     
     try {
-      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${data}.json`);
-      const json = await response.json();
+      // 1. Try Global Open Food Facts API v2 first
+      let response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`);
+      let json = await response.json();
 
-      if (json.status === 1) {
+      // 2. Fallback to Indian Regional Open Food Facts API if not found globally
+      if (!json.product || json.status === 0) {
+        response = await fetch(`https://in.openfoodfacts.org/api/v2/product/${data}.json`);
+        json = await response.json();
+      }
+
+      if (json.product && (json.status === 1 || json.product.product_name)) {
         const product = json.product;
         const icmrFlags = checkICMRGuidelines(product);
         const additives = (product.additives_tags || []).map((tag: string) => decodeAdditive(tag));
 
         setScannedData({
-          productName: product.product_name || "Unknown Product",
-          ingredients: product.ingredients_text || "No ingredient list available.",
+          productName: product.product_name || product.generic_name || "Unknown Indian Product",
+          ingredients: product.ingredients_text || product.ingredients_text_en || "No ingredient list available on database.",
           nutriscore: product.nutriscore_grade?.toUpperCase() || "N/A",
           icmrFlags,
           additives,
         });
       } else {
-        Alert.alert("Product Not Found", "This barcode is not registered in the database yet.");
+        Alert.alert(
+          "Product Not Found", 
+          `Barcode (${data}) is not registered in the Indian/Global database yet.`,
+          [{ text: "OK", onPress: () => { processingRef.current = false; } }]
+        );
       }
     } catch (error) {
-      Alert.alert("Network Error", "Please check your internet connection.");
+      Alert.alert(
+        "Network Error", 
+        "Please check your internet connection.",
+        [{ text: "OK", onPress: () => { processingRef.current = false; } }]
+      );
     } finally {
       setLoading(false);
     }
@@ -60,7 +77,7 @@ export default function App() {
         <CameraView 
           style={styles.camera} 
           facing="back"
-          torch={torchOn ? 'on' : 'off'}
+          torch={torchOn}
           onBarcodeScanned={loading ? undefined : handleBarCodeScanned}
         >
           {/* Top Header & Controls */}
@@ -131,7 +148,10 @@ export default function App() {
 
           <TouchableOpacity 
             style={styles.resetButton} 
-            onPress={() => setScannedData(null)}
+            onPress={() => {
+              processingRef.current = false;
+              setScannedData(null);
+            }}
           >
             <Text style={styles.resetButtonText}>📷 Scan Another Product</Text>
           </TouchableOpacity>
