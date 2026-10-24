@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, ScrollView, Image, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { decodeAdditive, checkICMRGuidelines } from './src/utils/healthRules';
+import { decodeAdditive, checkICMRGuidelines, getIndianSwaps } from './src/utils/healthRules';
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -11,10 +11,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   
-  // OCR states
-  const [ocrImage, setOcrImage] = useState<string | null>(null);
   const [ocrAnalyzing, setOcrAnalyzing] = useState(false);
-  
   const lastScannedCode = useRef<string | null>(null);
   const scanLock = useRef(false);
 
@@ -55,6 +52,7 @@ export default function App() {
         const product = json.product;
         const icmrFlags = checkICMRGuidelines(product);
         const additives = (product.additives_tags || []).map((tag: string) => decodeAdditive(tag));
+        const swaps = getIndianSwaps(icmrFlags, additives);
 
         let healthScore = 4.2;
         if (icmrFlags.length > 0) healthScore -= (icmrFlags.length * 0.7);
@@ -74,8 +72,11 @@ export default function App() {
           healthScore: healthScore.toFixed(1),
           icmrFlags,
           additives,
+          swaps,
         });
       } else {
+        const icmrFlags = ["ℹ️ Unregistered Product: Database record pending. Inspect nutrition panel manually."];
+        const swaps = getIndianSwaps(icmrFlags, []);
         setScannedData({
           barcode: cleanBarcode,
           brand: "Unregistered / Local Item",
@@ -83,8 +84,9 @@ export default function App() {
           ingredients: "This barcode is not indexed in the database. Please review the ingredients label directly on the product packaging.",
           nutriscore: "C",
           healthScore: "3.0",
-          icmrFlags: ["ℹ️ Unregistered Product: Database record pending. Inspect nutrition panel manually."],
+          icmrFlags,
           additives: [],
+          swaps,
         });
       }
     } catch (error) {
@@ -102,14 +104,12 @@ export default function App() {
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const uri = result.assets[0].uri;
-      setOcrImage(uri);
       processOcrImage(uri);
     }
   };
 
   const processOcrImage = (uri: string) => {
     setOcrAnalyzing(true);
-    // Simulate AI Vision OCR parsing unbranded back-of-pack label
     setTimeout(() => {
       const simulatedText = "Ingredients: Refined wheat flour (maida), sugar, hydrogenated palm oil, emulsifier (INS 322), artificial color (INS 102), preservative (INS 211).";
       const mockProduct = {
@@ -119,6 +119,7 @@ export default function App() {
 
       const icmrFlags = checkICMRGuidelines(mockProduct);
       const additives = ['102', '211', '322'].map(code => decodeAdditive(code));
+      const swaps = getIndianSwaps(icmrFlags, additives);
 
       setScannedData({
         barcode: 'OCR-AI-SNAP',
@@ -129,6 +130,7 @@ export default function App() {
         healthScore: '2.2',
         icmrFlags,
         additives,
+        swaps,
       });
       setOcrAnalyzing(false);
     }, 2000);
@@ -138,7 +140,6 @@ export default function App() {
     <View style={styles.container}>
       {!scannedData ? (
         <View style={{ flex: 1 }}>
-          {/* Mode Switcher Header */}
           <View style={styles.modeTabBar}>
             <TouchableOpacity 
               style={[styles.modeTab, mode === 'barcode' && styles.activeModeTab]}
@@ -221,6 +222,7 @@ export default function App() {
             </View>
           </View>
 
+          {/* ICMR Guidelines Advisory */}
           {scannedData.icmrFlags.length > 0 && (
             <View style={styles.alertBox}>
               <Text style={styles.alertTitle}>🇮🇳 ICMR-NIN & FSSAI Guidelines Advisory:</Text>
@@ -230,6 +232,21 @@ export default function App() {
             </View>
           )}
 
+          {/* Healthier Indian Alternatives & Swaps Engine */}
+          {scannedData.swaps && scannedData.swaps.length > 0 && (
+            <View style={styles.swapBox}>
+              <Text style={styles.swapTitle}>🌿 Healthier Indian Alternatives & Swaps:</Text>
+              {scannedData.swaps.map((swap: any, idx: number) => (
+                <View key={idx} style={styles.swapCard}>
+                  <Text style={styles.swapTrigger}>⚠️ Trigger: {swap.trigger}</Text>
+                  <Text style={styles.swapAlternative}>✨ Recommended Swap: {swap.alternative}</Text>
+                  <Text style={styles.swapBenefit}>💡 Why it's better: {swap.benefit}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* INS & E-Code Additive Unmasker */}
           {scannedData.additives.length > 0 && (
             <View style={styles.sectionBox}>
               <Text style={styles.sectionHeader}>🧪 INS & E-Code Additive Unmasker:</Text>
@@ -261,7 +278,6 @@ export default function App() {
               scanLock.current = false;
               lastScannedCode.current = null;
               setScannedData(null);
-              setOcrImage(null);
             }}
           >
             <Text style={styles.resetButtonText}>🔄 Scan Another Product</Text>
@@ -314,6 +330,12 @@ const styles = StyleSheet.create({
   alertBox: { backgroundColor: '#FEF3C7', padding: 12, borderRadius: 8, marginBottom: 16 },
   alertTitle: { fontSize: 13, fontWeight: 'bold', color: '#92400E', marginBottom: 4 },
   alertText: { fontSize: 12, color: '#78350F', marginTop: 2 },
+  swapBox: { backgroundColor: '#ECFDF5', padding: 14, borderRadius: 10, marginBottom: 16, borderWidth: 1, borderColor: '#A7F3D0' },
+  swapTitle: { fontSize: 14, fontWeight: 'bold', color: '#065F46', marginBottom: 8 },
+  swapCard: { backgroundColor: '#FFF', padding: 10, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#D1FAE5' },
+  swapTrigger: { fontSize: 12, fontWeight: 'bold', color: '#B45309', marginBottom: 2 },
+  swapAlternative: { fontSize: 13, fontWeight: 'bold', color: '#047857', marginBottom: 2 },
+  swapBenefit: { fontSize: 11, color: '#4B5563' },
   sectionBox: { marginBottom: 16 },
   sectionHeader: { fontSize: 16, fontWeight: '700', color: '#334155', marginTop: 12, marginBottom: 6 },
   additiveCard: { backgroundColor: '#FFF', padding: 12, borderRadius: 8, marginBottom: 10, elevation: 1, borderWidth: 1, borderColor: '#E2E8F0' },

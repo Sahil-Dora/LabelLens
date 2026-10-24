@@ -8,6 +8,12 @@ export interface AdditiveDetail {
   icmrContext: string;
 }
 
+export interface SwapSuggestion {
+  trigger: string;
+  alternative: string;
+  benefit: string;
+}
+
 export const INS_DICTIONARY: Record<string, AdditiveDetail> = {
   '102': {
     name: 'Tartrazine',
@@ -173,4 +179,49 @@ export const checkICMRGuidelines = (product: any) => {
   }
 
   return flags;
+};
+
+export const getIndianSwaps = (icmrFlags: string[], additives: AdditiveDetail[]): SwapSuggestion[] => {
+  const swaps: SwapSuggestion[] = [];
+  const flagsStr = icmrFlags.join(' ').toLowerCase();
+  const hasHighRiskAdditives = additives.some(a => a.risk === 'High');
+
+  if (flagsStr.includes('sugar') || flagsStr.includes('beverage')) {
+    swaps.push({
+      trigger: 'High Added Sugar / Artificial Sweeteners',
+      alternative: 'Fresh Coconut Water, Nimbu Paani (Lemonade with Jaggery), or Chaas (Buttermilk)',
+      benefit: 'Natural electrolytes, zero refined sugar spikes, and better hydration.'
+    });
+  }
+  if (flagsStr.includes('maida') || flagsStr.includes('refined wheat flour')) {
+    swaps.push({
+      trigger: 'Refined Wheat Flour (Maida)',
+      alternative: 'Millet Cookies (Ragi/Jowar), Baked Multigrain Khakhra, or Roasted Makhana',
+      benefit: 'High dietary fiber, essential micronutrients, and sustained energy.'
+    });
+  }
+  if (flagsStr.includes('sodium') || flagsStr.includes('saturated fat') || flagsStr.includes('palm oil')) {
+    swaps.push({
+      trigger: 'High Sodium / Palm Oil / Saturated Fat',
+      alternative: 'Roasted Chana (Chickpeas), Mixed Nuts & Seeds, or Baked Ragi Chips',
+      benefit: 'Heart-healthy plant-based protein, good fats, and lower sodium content.'
+    });
+  }
+  if (hasHighRiskAdditives || flagsStr.includes('synthetic color') || flagsStr.includes('tartrazine')) {
+    swaps.push({
+      trigger: 'Harmful Synthetic Additives / Colors',
+      alternative: 'Traditional Homemade Snacks or Clean-Label Organic Indian Brands',
+      benefit: 'Zero artificial azo dyes, no chemical preservatives, and pure ingredients.'
+    });
+  }
+
+  if (swaps.length === 0) {
+    swaps.push({
+      trigger: 'General Maintenance',
+      alternative: 'Whole seasonal fruits, sprouts, or traditional homemade bites',
+      benefit: 'Maximum natural vitamins, minerals, and overall vitality.'
+    });
+  }
+
+  return swaps;
 };
