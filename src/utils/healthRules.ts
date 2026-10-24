@@ -225,3 +225,32 @@ export const getIndianSwaps = (icmrFlags: string[], additives: AdditiveDetail[])
 
   return swaps;
 };
+
+export const checkAllergenProfile = (product: any, profile: string) => {
+  const warnings: string[] = [];
+  const ingredients = (product?.ingredients_text || product?.ingredients_text_en || '').toLowerCase();
+  const nutriments = product?.nutriments || {};
+  const sugar = nutriments['sugars_100g'] || 0;
+
+  if (profile === 'Diabetic-Friendly' && (sugar > 5 || ingredients.includes('sugar') || ingredients.includes('syrup') || ingredients.includes('aspartame'))) {
+    warnings.push(`🔴 Diabetic Alert: Contains notable sugar (${sugar.toFixed(1)}g/100g) or sweeteners that may spike blood glucose.`);
+  }
+  if (profile === 'Vegan' && (ingredients.includes('milk') || ingredients.includes('butter') || ingredients.includes('honey') || ingredients.includes('whey') || ingredients.includes('casein'))) {
+    warnings.push(`🔴 Vegan Alert: Contains dairy or animal-derived ingredients (milk/butter/whey/honey).`);
+  }
+  if (profile === 'Jain' && (ingredients.includes('onion') || ingredients.includes('garlic') || ingredients.includes('potato') || ingredients.includes('carrot') || ingredients.includes('ginger'))) {
+    warnings.push(`🔴 Jain Alert: Contains root vegetables, onion, or garlic.`);
+  }
+  if (profile === 'Gluten-Free' && (ingredients.includes('wheat') || ingredients.includes('maida') || ingredients.includes('barley') || ingredients.includes('malt') || ingredients.includes('maida'))) {
+    warnings.push(`🔴 Gluten-Free Alert: Contains wheat, maida, or gluten derivatives.`);
+  }
+  if (profile === 'Nut Allergy' && (ingredients.includes('peanut') || ingredients.includes('almond') || ingredients.includes('cashew') || ingredients.includes('nut') || ingredients.includes('soy'))) {
+    warnings.push(`🔴 Allergen Alert: Contains peanuts, tree nuts, or soy derivatives.`);
+  }
+
+  if (warnings.length === 0) {
+    warnings.push(`🟢 Safe for ${profile}: No direct conflict detected with your selected profile.`);
+  }
+
+  return warnings;
+};

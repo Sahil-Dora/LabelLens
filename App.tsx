@@ -2,11 +2,12 @@ import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { decodeAdditive, checkICMRGuidelines, getIndianSwaps } from './src/utils/healthRules';
+import { decodeAdditive, checkICMRGuidelines, getIndianSwaps, checkAllergenProfile } from './src/utils/healthRules';
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
   const [mode, setMode] = useState<'barcode' | 'ocr'>('barcode');
+  const [selectedProfile, setSelectedProfile] = useState<string>('Diabetic-Friendly');
   const [scannedData, setScannedData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -14,6 +15,8 @@ export default function App() {
   const [ocrAnalyzing, setOcrAnalyzing] = useState(false);
   const lastScannedCode = useRef<string | null>(null);
   const scanLock = useRef(false);
+
+  const profiles = ['Diabetic-Friendly', 'Vegan', 'Jain', 'Gluten-Free', 'Nut Allergy'];
 
   if (!permission) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>;
@@ -53,6 +56,7 @@ export default function App() {
         const icmrFlags = checkICMRGuidelines(product);
         const additives = (product.additives_tags || []).map((tag: string) => decodeAdditive(tag));
         const swaps = getIndianSwaps(icmrFlags, additives);
+        const profileWarnings = checkAllergenProfile(product, selectedProfile);
 
         let healthScore = 4.2;
         if (icmrFlags.length > 0) healthScore -= (icmrFlags.length * 0.7);
@@ -73,10 +77,12 @@ export default function App() {
           icmrFlags,
           additives,
           swaps,
+          profileWarnings,
         });
       } else {
         const icmrFlags = ["ℹ️ Unregistered Product: Database record pending. Inspect nutrition panel manually."];
         const swaps = getIndianSwaps(icmrFlags, []);
+        const profileWarnings = [`🟢 Safe for ${profile}: No direct conflict detected.`];
         setScannedData({
           barcode: cleanBarcode,
           brand: "Unregistered / Local Item",
@@ -87,6 +93,7 @@ export default function App() {
           icmrFlags,
           additives: [],
           swaps,
+          profileWarnings,
         });
       }
     } catch (error) {
@@ -111,7 +118,7 @@ export default function App() {
   const processOcrImage = (uri: string) => {
     setOcrAnalyzing(true);
     setTimeout(() => {
-      const simulatedText = "Ingredients: Refined wheat flour (maida), sugar, hydrogenated palm oil, emulsifier (INS 322), artificial color (INS 102), preservative (INS 211).";
+      const simulatedText = "Ingredients: Refined wheat flour (maida), sugar, hydrogenated palm oil, milk solids, emulsifier (INS 322), artificial color (INS 102), preservative (INS 211).";
       const mockProduct = {
         ingredients_text: simulatedText,
         nutriments: { 'sugars_100g': 16.0, 'saturated-fat_100g': 9.0, 'sodium_100g': 0.5 }
@@ -120,6 +127,7 @@ export default function App() {
       const icmrFlags = checkICMRGuidelines(mockProduct);
       const additives = ['102', '211', '322'].map(code => decodeAdditive(code));
       const swaps = getIndianSwaps(icmrFlags, additives);
+      const profileWarnings = checkAllergenProfile(mockProduct, selectedProfile);
 
       setScannedData({
         barcode: 'OCR-AI-SNAP',
@@ -131,6 +139,7 @@ export default function App() {
         icmrFlags,
         additives,
         swaps,
+        profileWarnings,
       });
       setOcrAnalyzing(false);
     }, 2000);
@@ -156,6 +165,22 @@ export default function App() {
             >
               <Text style={[styles.modeTabText, mode === 'ocr' && styles.activeModeTabText]}>🤖 AI Back-of-Pack OCR</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Dietary Profile Selector */}
+          <View style={styles.profileContainer}>
+            <Text style={styles.profileHeader}>🛡️ Active Dietary / Allergen Profile:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.profileScroll}>
+              {profiles.map((p) => (
+                <TouchableOpacity 
+                  key={p} 
+                  style={[styles.profileChip, selectedProfile === p && styles.activeProfileChip]}
+                  onPress={() => setSelectedProfile(p)}
+                >
+                  <Text style={[styles.profileChipText, selectedProfile === p && styles.activeProfileChipText]}>{p}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
 
           {mode === 'barcode' ? (
@@ -222,6 +247,16 @@ export default function App() {
             </View>
           </View>
 
+          {/* Personalized Dietary Profile Warnings */}
+          {scannedData.profileWarnings && scannedData.profileWarnings.length > 0 && (
+            <View style={styles.profileAlertBox}>
+              <Text style={styles.profileAlertTitle}>🛡️ Profile Match ({selectedProfile}):</Text>
+              {scannedData.profileWarnings.map((warn: string, idx: number) => (
+                <Text key={idx} style={styles.profileAlertText}>{warn}</Text>
+              ))}
+            </View>
+          )}
+
           {/* ICMR Guidelines Advisory */}
           {scannedData.icmrFlags.length > 0 && (
             <View style={styles.alertBox}>
@@ -232,7 +267,7 @@ export default function App() {
             </View>
           )}
 
-          {/* Healthier Indian Alternatives & Swaps Engine */}
+          {/* Healthier Indian Alternatives & Swaps */}
           {scannedData.swaps && scannedData.swaps.length > 0 && (
             <View style={styles.swapBox}>
               <Text style={styles.swapTitle}>🌿 Healthier Indian Alternatives & Swaps:</Text>
@@ -297,6 +332,13 @@ const styles = StyleSheet.create({
   activeModeTab: { backgroundColor: '#2563EB' },
   modeTabText: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
   activeModeTabText: { color: '#FFF', fontWeight: 'bold' },
+  profileContainer: { backgroundColor: '#1E293B', paddingVertical: 10, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: '#334155' },
+  profileHeader: { color: '#38BDF8', fontSize: 12, fontWeight: 'bold', marginBottom: 6 },
+  profileScroll: { flexDirection: 'row' },
+  profileChip: { backgroundColor: '#334155', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginRight: 8 },
+  activeProfileChip: { backgroundColor: '#2563EB' },
+  profileChipText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
+  activeProfileChipText: { color: '#FFF', fontWeight: 'bold' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, paddingHorizontal: 20 },
   headerTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
   torchButton: { backgroundColor: 'rgba(15, 23, 42, 0.7)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#334155' },
@@ -327,6 +369,9 @@ const styles = StyleSheet.create({
   scoreCard: { flex: 1, backgroundColor: '#FFF', padding: 12, borderRadius: 10, marginRight: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', elevation: 1 },
   scoreLabel: { fontSize: 12, color: '#64748B', fontWeight: '600', marginBottom: 4 },
   scoreValue: { fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
+  profileAlertBox: { backgroundColor: '#EFF6FF', padding: 12, borderRadius: 8, marginBottom: 16, borderWidth: 1, borderColor: '#BFDBFE' },
+  profileAlertTitle: { fontSize: 13, fontWeight: 'bold', color: '#1E40AF', marginBottom: 4 },
+  profileAlertText: { fontSize: 12, color: '#1E3A8A', marginTop: 2, fontWeight: '600' },
   alertBox: { backgroundColor: '#FEF3C7', padding: 12, borderRadius: 8, marginBottom: 16 },
   alertTitle: { fontSize: 13, fontWeight: 'bold', color: '#92400E', marginBottom: 4 },
   alertText: { fontSize: 12, color: '#78350F', marginTop: 2 },
