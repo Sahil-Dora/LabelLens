@@ -7,6 +7,7 @@ export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scannedData, setScannedData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   if (!permission) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>;
@@ -24,7 +25,7 @@ export default function App() {
   }
 
   const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
-    if (loading) return;
+    if (loading || scannedData) return;
     setLoading(true);
     
     try {
@@ -59,11 +60,30 @@ export default function App() {
         <CameraView 
           style={styles.camera} 
           facing="back"
+          torch={torchOn ? 'on' : 'off'}
           onBarcodeScanned={loading ? undefined : handleBarCodeScanned}
         >
-          <View style={styles.overlay}>
-            <Text style={styles.overlayText}>Align food barcode within the frame</Text>
-            {loading && <ActivityIndicator size="large" color="#FFF" style={{ marginTop: 20 }} />}
+          {/* Top Header & Controls */}
+          <View style={styles.topBar}>
+            <Text style={styles.headerTitle}>⚡ LabelLens Scanner</Text>
+            <TouchableOpacity 
+              style={[styles.torchButton, torchOn && styles.torchActive]} 
+              onPress={() => setTorchOn(!torchOn)}
+            >
+              <Text style={styles.torchText}>{torchOn ? '🔦 Flash ON' : '💡 Flash OFF'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Professional Viewfinder Box */}
+          <View style={styles.viewfinderContainer}>
+            <View style={styles.scanReticle}>
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
+            </View>
+            <Text style={styles.overlayText}>Align barcode inside frame to scan</Text>
+            {loading && <ActivityIndicator size="large" color="#38BDF8" style={{ marginTop: 20 }} />}
           </View>
         </CameraView>
       ) : (
@@ -113,7 +133,7 @@ export default function App() {
             style={styles.resetButton} 
             onPress={() => setScannedData(null)}
           >
-            <Text style={styles.resetButtonText}>Scan Another Product</Text>
+            <Text style={styles.resetButtonText}>📷 Scan Another Product</Text>
           </TouchableOpacity>
         </ScrollView>
       )}
@@ -125,8 +145,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0F172A' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#0F172A' },
   camera: { flex: 1 },
-  overlay: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', marginBottom: 50 },
-  overlayText: { color: '#FFF', fontSize: 16, fontWeight: '600', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 50, paddingHorizontal: 20 },
+  headerTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  torchButton: { backgroundColor: 'rgba(15, 23, 42, 0.7)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#334155' },
+  torchActive: { backgroundColor: '#2563EB', borderColor: '#60A5FA' },
+  torchText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  viewfinderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 40 },
+  scanReticle: { width: 260, height: 160, position: 'relative', justifyContent: 'center', alignItems: 'center' },
+  corner: { position: 'absolute', width: 30, height: 30, borderColor: '#38BDF8', borderWidth: 4 },
+  topLeft: { top: 0, left: 0, borderBottomWidth: 0, borderRightWidth: 0 },
+  topRight: { top: 0, right: 0, borderBottomWidth: 0, borderLeftWidth: 0 },
+  bottomLeft: { bottom: 0, left: 0, borderTopWidth: 0, borderRightWidth: 0 },
+  bottomRight: { bottom: 0, right: 0, borderTopWidth: 0, borderLeftWidth: 0 },
+  overlayText: { color: '#E2E8F0', fontSize: 14, fontWeight: '600', backgroundColor: 'rgba(15, 23, 42, 0.75)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, marginTop: 24, overflow: 'hidden' },
   text: { color: '#FFF', fontSize: 16, textAlign: 'center', marginBottom: 20 },
   button: { backgroundColor: '#2563EB', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 },
   buttonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
