@@ -8,7 +8,8 @@ export default function App() {
   const [scannedData, setScannedData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
-  const processingRef = useRef(false);
+  const lastScannedCode = useRef<string | null>(null);
+  const scanLock = useRef(false);
 
   if (!permission) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>;
@@ -26,45 +27,91 @@ export default function App() {
   }
 
   const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
-    if (processingRef.current || loading || scannedData) return;
-    processingRef.current = true;
+    const cleanBarcode = data ? data.trim() : '';
+    if (scanLock.current || loading || scannedData || cleanBarcode.length < 6) return;
+    
+    if (lastScannedCode.current === cleanBarcode) return;
+
+    scanLock.current = true;
+    lastScannedCode.current = cleanBarcode;
     setLoading(true);
     
     try {
-      // 1. Try Global Open Food Facts API v2 first
-      let response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`);
+      // 1. Query Global Open Food Facts API v2
+      let response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${cleanBarcode}.json`);
       let json = await response.json();
 
-      // 2. Fallback to Indian Regional Open Food Facts API if not found globally
+      // 2. Fallback to Indian Regional Database if not found globally
       if (!json.product || json.status === 0) {
-        response = await fetch(`https://in.openfoodfacts.org/api/v2/product/${data}.json`);
+        response = await fetch(`https://in.openfoodfacts.org/api/v2/product/${cleanBarcode}.json`);
         json = await response.json();
       }
 
       if (json.product && (json.status === 1 || json.product.product_name)) {
         const product = json.product;
+
+        // --- REFINED NON-FOOD GUARDRAIL CHECK ---
+        const categories = (product.categories || product.categories_tags || []).join(' ').toLowerCase();
+        const loweredName = (product.product_name || product.generic_name || '').toLowerCase();
+        
+        const strictNonFoodKeywords = ['shampoo', 'body wash', 'detergent', 'toothpaste', 'dishwash', 'lotion', 'battery', 'electronic', 'plastic toy', 'deodorant spray'];
+        const isClearlyNonFood = strictNonFoodKeywords.some(kw => loweredName.includes(kw) && !categories.includes('food') && !categories.includes('beverage'));
+        
+        if (isClearlyNonFood) {
+          Alert.alert(
+            "⚠️ Non-Food Product Detected",
+            `"${product.product_name || 'This item'}" is a non-consumable household or cosmetic good, not a food item.`,
+            [{ text: "Scan Another", onPress: () => { scanLock.current = false; setLoading(false); } }]
+          );
+          setLoading(false);
+          return;
+        }
+
         const icmrFlags = checkICMRGuidelines(product);
         const additives = (product.additives_tags || []).map((tag: string) => decodeAdditive(tag));
 
+        // Heuristic Health Score Calculation out of 5.0
+        let healthScore = 4.0;
+        if (icmrFlags.length > 0) healthScore -= (icmrFlags.length * 0.7);
+        const highRiskAdditives = additives.filter((a: any) => a.risk === 'High').length;
+        healthScore -= (highRiskAdditives * 0.5);
+        if (healthScore < 1.0) healthScore = 1.0;
+        if (healthScore > 5.0) healthScore = 5.0;
+
+        // Nutri-Score fallback evaluation if missing
+        let nutriscore = product.nutriscore_grade ? product.nutriscore_grade.toUpperCase() : null;
+        if (!nutriscore || nutriscore === 'N/A') {
+          nutriscore = icmrFlags.length >= 2 ? 'D' : icmrFlags.length === 1 ? 'C' : 'B';
+        }
+
         setScannedData({
-          productName: product.product_name || product.generic_name || "Unknown Indian Product",
-          ingredients: product.ingredients_text || product.ingredients_text_en || "No ingredient list available on database.",
-          nutriscore: product.nutriscore_grade?.toUpperCase() || "N/A",
+          barcode: cleanBarcode,
+          brand: product.brands || product.brand_owner || "Indian / Local Brand",
+          productName: product.product_name || product.generic_name || "Packaged Food Product",
+          ingredients: product.ingredients_text || product.ingredients_text_en || "Ingredients list not explicitly printed on database record. Please verify physical packaging label.",
+          nutriscore,
+          healthScore: healthScore.toFixed(1),
           icmrFlags,
           additives,
         });
       } else {
-        Alert.alert(
-          "Product Not Found", 
-          `Barcode (${data}) is not registered in the Indian/Global database yet.`,
-          [{ text: "OK", onPress: () => { processingRef.current = false; } }]
-        );
+        // Fallback for completely unregistered barcodes so user gets an informative card instead of dead end
+        setScannedData({
+          barcode: cleanBarcode,
+          brand: "Unregistered / Local Item",
+          productName: `Scanned Product (${cleanBarcode})`,
+          ingredients: "This barcode is not yet indexed in the Open Food Facts or FSSAI database. Please verify the ingredients list directly on the product wrapper.",
+          nutriscore: "C",
+          healthScore: "3.0",
+          icmrFlags: ["ℹ️ Unregistered Product: Database record pending. Inspect nutrition panel manually."],
+          additives: [],
+        });
       }
     } catch (error) {
       Alert.alert(
         "Network Error", 
-        "Please check your internet connection.",
-        [{ text: "OK", onPress: () => { processingRef.current = false; } }]
+        "Please check your internet connection and try scanning again.",
+        [{ text: "OK", onPress: () => { scanLock.current = false; } }]
       );
     } finally {
       setLoading(false);
@@ -80,7 +127,7 @@ export default function App() {
           torch={torchOn}
           onBarcodeScanned={loading ? undefined : handleBarCodeScanned}
         >
-          {/* Top Header & Controls */}
+          {/* Top Header & Torch Control */}
           <View style={styles.topBar}>
             <Text style={styles.headerTitle}>⚡ LabelLens Scanner</Text>
             <TouchableOpacity 
@@ -91,7 +138,7 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
-          {/* Professional Viewfinder Box */}
+          {/* Precision Viewfinder Frame */}
           <View style={styles.viewfinderContainer}>
             <View style={styles.scanReticle}>
               <View style={[styles.corner, styles.topLeft]} />
@@ -104,23 +151,35 @@ export default function App() {
           </View>
         </CameraView>
       ) : (
-        <ScrollView style={styles.resultContainer}>
-          <Text style={styles.title}>🔬 LabelLens Analysis</Text>
+        <ScrollView style={styles.resultContainer} contentContainerStyle={{ paddingBottom: 40 }}>
+          <Text style={styles.title}>🔬 LabelLens Health Analysis</Text>
+          <Text style={styles.brandName}>🏷️ Brand: {scannedData.brand}</Text>
           <Text style={styles.productName}>{scannedData.productName}</Text>
+          <Text style={styles.barcodeMeta}>Barcode ID: {scannedData.barcode}</Text>
           
+          {/* Rating Badges Row (Nutri-score A-E & Health Rating out of 5.0) */}
           <View style={styles.badgeRow}>
-            <Text style={styles.badge}>Nutri-Score: {scannedData.nutriscore}</Text>
+            <View style={styles.scoreCard}>
+              <Text style={styles.scoreLabel}>Nutri-Score</Text>
+              <Text style={styles.scoreValue}>{scannedData.nutriscore} / E</Text>
+            </View>
+            <View style={styles.scoreCard}>
+              <Text style={styles.scoreLabel}>Health Rating</Text>
+              <Text style={styles.scoreValue}>{scannedData.healthScore} ⭐ / 5.0</Text>
+            </View>
           </View>
 
+          {/* ICMR-NIN Guidelines Advisory */}
           {scannedData.icmrFlags.length > 0 && (
             <View style={styles.alertBox}>
-              <Text style={styles.alertTitle}>🇮🇳 ICMR-NIN Guidelines Advisory:</Text>
+              <Text style={styles.alertTitle}>🇮🇳 ICMR-NIN & FSSAI Guidelines Advisory:</Text>
               {scannedData.icmrFlags.map((flag: string, index: number) => (
                 <Text key={index} style={styles.alertText}>{flag}</Text>
               ))}
             </View>
           )}
 
+          {/* Detailed Chemical & Additive Breakdown */}
           {scannedData.additives.length > 0 && (
             <View style={styles.sectionBox}>
               <Text style={styles.sectionHeader}>🧪 Detailed Chemical & Additive Breakdown:</Text>
@@ -149,7 +208,8 @@ export default function App() {
           <TouchableOpacity 
             style={styles.resetButton} 
             onPress={() => {
-              processingRef.current = false;
+              scanLock.current = false;
+              lastScannedCode.current = null;
               setScannedData(null);
             }}
           >
@@ -182,10 +242,14 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#2563EB', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 },
   buttonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   resultContainer: { flex: 1, padding: 20, backgroundColor: '#F8FAFC' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#1E293B', marginBottom: 10 },
-  productName: { fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 12 },
-  badgeRow: { flexDirection: 'row', marginBottom: 16 },
-  badge: { backgroundColor: '#22C55E', color: '#FFF', fontWeight: 'bold', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, overflow: 'hidden' },
+  title: { fontSize: 20, fontWeight: 'bold', color: '#1E293B', marginBottom: 6 },
+  brandName: { fontSize: 14, fontWeight: '700', color: '#2563EB', marginBottom: 4 },
+  productName: { fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 2 },
+  barcodeMeta: { fontSize: 11, color: '#64748B', marginBottom: 12 },
+  badgeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  scoreCard: { flex: 1, backgroundColor: '#FFF', padding: 12, borderRadius: 10, marginRight: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', elevation: 1 },
+  scoreLabel: { fontSize: 12, color: '#64748B', fontWeight: '600', marginBottom: 4 },
+  scoreValue: { fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
   alertBox: { backgroundColor: '#FEF3C7', padding: 12, borderRadius: 8, marginBottom: 16 },
   alertTitle: { fontSize: 13, fontWeight: 'bold', color: '#92400E', marginBottom: 4 },
   alertText: { fontSize: 12, color: '#78350F', marginTop: 2 },
@@ -199,7 +263,7 @@ const styles = StyleSheet.create({
   additiveDesc: { fontSize: 12, color: '#475569', marginTop: 4, lineHeight: 16 },
   icmrBox: { marginTop: 8, backgroundColor: '#F1F5F9', padding: 8, borderRadius: 6 },
   icmrText: { fontSize: 11, color: '#334155', lineHeight: 15 },
-  bodyText: { fontSize: 14, color: '#475569', lineHeight: 20, backgroundColor: '#FFF', padding: 12, borderRadius: 8 },
-  resetButton: { backgroundColor: '#2563EB', marginTop: 30, marginBottom: 40, padding: 16, borderRadius: 10, alignItems: 'center' },
+  bodyText: { fontSize: 14, color: '#475569', lineHeight: 20, backgroundColor: '#FFF', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  resetButton: { backgroundColor: '#2563EB', marginTop: 20, padding: 16, borderRadius: 10, alignItems: 'center' },
   resetButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 }
 });
