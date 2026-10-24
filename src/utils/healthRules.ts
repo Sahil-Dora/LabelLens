@@ -33,14 +33,14 @@ export const INS_DICTIONARY: Record<string, AdditiveDetail> = {
     laymanExplanation: 'Restricted or banned in several countries due to cumulative sensitivity and health concerns.',
     icmrContext: 'Regulated under FSSAI limits for permitted synthetic food colors.'
   },
-  '150D': {
-    name: 'Caramel IV (Ammonia-Sulfite Caramel)',
-    eNumber: 'E150d',
-    category: 'Coloring Agent',
-    risk: 'Moderate',
-    description: 'Caramel color produced using ammonia and sulfite compounds, common in colas and dark beverages.',
-    laymanExplanation: 'Contains trace processing byproducts monitored for long-term metabolic impact.',
-    icmrContext: 'Widely used in Indian soft drinks and dark beverages under FSSAI standards.'
+  '290': {
+    name: 'Carbon Dioxide',
+    eNumber: 'E290',
+    category: 'Carbonating Agent / Propellant',
+    risk: 'Low',
+    description: 'Natural gas used to give fizz and carbonation to sodas and sparkling waters.',
+    laymanExplanation: 'Completely safe gas used universally in carbonated drinks.',
+    icmrContext: 'Standard permitted food additive in beverages.'
   },
   '202': {
     name: 'Potassium Sorbate',
@@ -96,15 +96,6 @@ export const INS_DICTIONARY: Record<string, AdditiveDetail> = {
     laymanExplanation: 'Safe natural acidifier present in lemons and oranges.',
     icmrContext: 'Standard permitted food additive in India.'
   },
-  '331': {
-    name: 'Sodium Citrates',
-    eNumber: 'E331',
-    category: 'Acidity Regulator / Buffer',
-    risk: 'Low',
-    description: 'Salt of citric acid used to control pH and tartness in beverages.',
-    laymanExplanation: 'Generally recognized as safe for daily consumption.',
-    icmrContext: 'Approved by FSSAI for beverages and packaged foods.'
-  },
   '500': {
     name: 'Sodium Carbonates (Baking Soda)',
     eNumber: 'INS 500',
@@ -152,7 +143,7 @@ export const decodeAdditive = (tag: string): AdditiveDetail => {
   );
 };
 
-export const checkICMRGuidelines = (product: any) => {
+export const checkICMRGuidelines = (product: any, ingredientsText: string = '') => {
   const flags: string[] = [];
   const nutriments = product?.nutriments || {};
 
@@ -170,86 +161,87 @@ export const checkICMRGuidelines = (product: any) => {
     flags.push(`⚠️ High Sodium Content: ${sodium.toFixed(0)}mg/100g (ICMR warning cutoff: 500mg/100g)`);
   }
 
-  const ingredients = (product?.ingredients_text || product?.ingredients_text_en || '').toLowerCase();
-  if (ingredients.includes('palm oil') || ingredients.includes('palmolein')) {
+  const fullText = (product?.ingredients_text || product?.ingredients_text_en || ingredientsText || '').toLowerCase();
+  if (fullText.includes('palm oil') || fullText.includes('palmolein')) {
     flags.push('🌴 Contains Palm Oil / Palmolein (High saturated fat source)');
   }
-  if (ingredients.includes('maida') || ingredients.includes('refined wheat flour')) {
+  if (fullText.includes('maida') || fullText.includes('refined wheat flour')) {
     flags.push('🌾 Uses Refined Wheat Flour (Maida) - Low dietary fiber content');
   }
 
   return flags;
 };
 
-export const getIndianSwaps = (icmrFlags: string[], additives: AdditiveDetail[]): SwapSuggestion[] => {
+export const getIndianSwaps = (icmrFlags: string[], additives: AdditiveDetail[], ingredientsText: string = ''): SwapSuggestion[] => {
   const swaps: SwapSuggestion[] = [];
   const flagsStr = icmrFlags.join(' ').toLowerCase();
+  const fullText = ingredientsText.toLowerCase();
   const hasHighRiskAdditives = additives.some(a => a.risk === 'High');
 
-  if (flagsStr.includes('sugar') || flagsStr.includes('beverage')) {
+  if (flagsStr.includes('sugar') || fullText.includes('sugar') || fullText.includes('syrup')) {
     swaps.push({
-      trigger: 'High Added Sugar / Artificial Sweeteners',
-      alternative: 'Fresh Coconut Water, Nimbu Paani (Lemonade with Jaggery), or Chaas (Buttermilk)',
-      benefit: 'Natural electrolytes, zero refined sugar spikes, and better hydration.'
+      trigger: 'High Added Sugar',
+      alternative: 'Fresh Coconut Water, Nimbu Paani (Jaggery), or Chaas (Buttermilk)',
+      benefit: 'Natural electrolytes, zero refined sugar spikes, and optimal hydration.'
     });
   }
-  if (flagsStr.includes('maida') || flagsStr.includes('refined wheat flour')) {
+  if (flagsStr.includes('maida') || fullText.includes('maida') || fullText.includes('refined wheat')) {
     swaps.push({
       trigger: 'Refined Wheat Flour (Maida)',
-      alternative: 'Millet Cookies (Ragi/Jowar), Baked Multigrain Khakhra, or Roasted Makhana',
+      alternative: 'Millet Cookies (Ragi/Jowar), Multigrain Khakhra, or Roasted Makhana',
       benefit: 'High dietary fiber, essential micronutrients, and sustained energy.'
     });
   }
-  if (flagsStr.includes('sodium') || flagsStr.includes('saturated fat') || flagsStr.includes('palm oil')) {
+  if (flagsStr.includes('sodium') || flagsStr.includes('saturated fat') || fullText.includes('palm oil')) {
     swaps.push({
-      trigger: 'High Sodium / Palm Oil / Saturated Fat',
+      trigger: 'High Sodium / Palm Oil',
       alternative: 'Roasted Chana (Chickpeas), Mixed Nuts & Seeds, or Baked Ragi Chips',
-      benefit: 'Heart-healthy plant-based protein, good fats, and lower sodium content.'
+      benefit: 'Heart-healthy plant protein and lower sodium.'
     });
   }
-  if (hasHighRiskAdditives || flagsStr.includes('synthetic color') || flagsStr.includes('tartrazine')) {
+  if (hasHighRiskAdditives || flagsStr.includes('synthetic color')) {
     swaps.push({
-      trigger: 'Harmful Synthetic Additives / Colors',
-      alternative: 'Traditional Homemade Snacks or Clean-Label Organic Indian Brands',
-      benefit: 'Zero artificial azo dyes, no chemical preservatives, and pure ingredients.'
+      trigger: 'Synthetic Food Colors / Additives',
+      alternative: 'Traditional Homemade Snacks or Clean-Label Organic Brands',
+      benefit: 'Zero artificial azo dyes and chemical preservatives.'
     });
   }
 
   if (swaps.length === 0) {
     swaps.push({
-      trigger: 'General Maintenance',
-      alternative: 'Whole seasonal fruits, sprouts, or traditional homemade bites',
-      benefit: 'Maximum natural vitamins, minerals, and overall vitality.'
+      trigger: 'Clean Product Profile',
+      alternative: 'Whole seasonal fruits or homemade traditional bites',
+      benefit: 'Maximum natural vitamins and vitality.'
     });
   }
 
   return swaps;
 };
 
-export const checkAllergenProfile = (product: any, profile: string) => {
+export const checkAllergenProfile = (product: any, ingredientsText: string = '', profile: string) => {
   const warnings: string[] = [];
-  const ingredients = (product?.ingredients_text || product?.ingredients_text_en || '').toLowerCase();
+  const fullText = (product?.ingredients_text || product?.ingredients_text_en || ingredientsText || '').toLowerCase();
   const nutriments = product?.nutriments || {};
   const sugar = nutriments['sugars_100g'] || 0;
 
-  if (profile === 'Diabetic-Friendly' && (sugar > 5 || ingredients.includes('sugar') || ingredients.includes('syrup') || ingredients.includes('aspartame'))) {
-    warnings.push(`🔴 Diabetic Alert: Contains notable sugar (${sugar.toFixed(1)}g/100g) or sweeteners that may spike blood glucose.`);
+  if (profile === 'Diabetic-Friendly' && (sugar > 5 || fullText.includes('sugar') || fullText.includes('syrup') || fullText.includes('aspartame'))) {
+    warnings.push(`🔴 Diabetic Alert: Contains notable sugar (${sugar > 0 ? sugar.toFixed(1) + 'g/100g' : 'present'}) or sweeteners.`);
   }
-  if (profile === 'Vegan' && (ingredients.includes('milk') || ingredients.includes('butter') || ingredients.includes('honey') || ingredients.includes('whey') || ingredients.includes('casein'))) {
-    warnings.push(`🔴 Vegan Alert: Contains dairy or animal-derived ingredients (milk/butter/whey/honey).`);
+  if (profile === 'Vegan' && (fullText.includes('milk') || fullText.includes('butter') || fullText.includes('honey') || fullText.includes('whey') || fullText.includes('casein') || fullText.includes('ghee'))) {
+    warnings.push(`🔴 Vegan Alert: Contains dairy or animal-derived ingredients (milk/butter/whey/ghee).`);
   }
-  if (profile === 'Jain' && (ingredients.includes('onion') || ingredients.includes('garlic') || ingredients.includes('potato') || ingredients.includes('carrot') || ingredients.includes('ginger'))) {
+  if (profile === 'Jain' && (fullText.includes('onion') || fullText.includes('garlic') || fullText.includes('potato') || fullText.includes('carrot') || fullText.includes('ginger'))) {
     warnings.push(`🔴 Jain Alert: Contains root vegetables, onion, or garlic.`);
   }
-  if (profile === 'Gluten-Free' && (ingredients.includes('wheat') || ingredients.includes('maida') || ingredients.includes('barley') || ingredients.includes('malt') || ingredients.includes('maida'))) {
+  if (profile === 'Gluten-Free' && (fullText.includes('wheat') || fullText.includes('maida') || fullText.includes('barley') || fullText.includes('malt'))) {
     warnings.push(`🔴 Gluten-Free Alert: Contains wheat, maida, or gluten derivatives.`);
   }
-  if (profile === 'Nut Allergy' && (ingredients.includes('peanut') || ingredients.includes('almond') || ingredients.includes('cashew') || ingredients.includes('nut') || ingredients.includes('soy'))) {
-    warnings.push(`🔴 Allergen Alert: Contains peanuts, tree nuts, or soy derivatives.`);
+  if (profile === 'Nut Allergy' && (fullText.includes('peanut') || fullText.includes('almond') || fullText.includes('cashew') || fullText.includes('nut') || fullText.includes('soy'))) {
+    warnings.push(`🔴 Allergen Alert: Contains peanuts, tree nuts, or soy.`);
   }
 
   if (warnings.length === 0) {
-    warnings.push(`🟢 Safe for ${profile}: No direct conflict detected with your selected profile.`);
+    warnings.push(`🟢 Safe for ${profile}: No direct conflict detected.`);
   }
 
   return warnings;
