@@ -50,17 +50,16 @@ export default function App() {
       if (json.product && (json.status === 1 || json.product.product_name)) {
         const product = json.product;
 
-        // --- REFINED NON-FOOD GUARDRAIL CHECK ---
+        // Non-food safety guardrail
         const categories = (product.categories || product.categories_tags || []).join(' ').toLowerCase();
         const loweredName = (product.product_name || product.generic_name || '').toLowerCase();
-        
-        const strictNonFoodKeywords = ['shampoo', 'body wash', 'detergent', 'toothpaste', 'dishwash', 'lotion', 'battery', 'electronic', 'plastic toy', 'deodorant spray'];
+        const strictNonFoodKeywords = ['shampoo', 'body wash', 'detergent', 'toothpaste', 'dishwash', 'lotion', 'battery', 'electronic', 'deodorant spray'];
         const isClearlyNonFood = strictNonFoodKeywords.some(kw => loweredName.includes(kw) && !categories.includes('food') && !categories.includes('beverage'));
         
         if (isClearlyNonFood) {
           Alert.alert(
             "⚠️ Non-Food Product Detected",
-            `"${product.product_name || 'This item'}" is a non-consumable household or cosmetic good, not a food item.`,
+            `"${product.product_name || 'This item'}" is a non-consumable household or cosmetic good.`,
             [{ text: "Scan Another", onPress: () => { scanLock.current = false; setLoading(false); } }]
           );
           setLoading(false);
@@ -71,14 +70,13 @@ export default function App() {
         const additives = (product.additives_tags || []).map((tag: string) => decodeAdditive(tag));
 
         // Heuristic Health Score Calculation out of 5.0
-        let healthScore = 4.0;
+        let healthScore = 4.2;
         if (icmrFlags.length > 0) healthScore -= (icmrFlags.length * 0.7);
         const highRiskAdditives = additives.filter((a: any) => a.risk === 'High').length;
         healthScore -= (highRiskAdditives * 0.5);
         if (healthScore < 1.0) healthScore = 1.0;
         if (healthScore > 5.0) healthScore = 5.0;
 
-        // Nutri-Score fallback evaluation if missing
         let nutriscore = product.nutriscore_grade ? product.nutriscore_grade.toUpperCase() : null;
         if (!nutriscore || nutriscore === 'N/A') {
           nutriscore = icmrFlags.length >= 2 ? 'D' : icmrFlags.length === 1 ? 'C' : 'B';
@@ -88,19 +86,18 @@ export default function App() {
           barcode: cleanBarcode,
           brand: product.brands || product.brand_owner || "Indian / Local Brand",
           productName: product.product_name || product.generic_name || "Packaged Food Product",
-          ingredients: product.ingredients_text || product.ingredients_text_en || "Ingredients list not explicitly printed on database record. Please verify physical packaging label.",
+          ingredients: product.ingredients_text || product.ingredients_text_en || "Ingredients list not explicitly printed on database record. Please inspect physical product packaging.",
           nutriscore,
           healthScore: healthScore.toFixed(1),
           icmrFlags,
           additives,
         });
       } else {
-        // Fallback for completely unregistered barcodes so user gets an informative card instead of dead end
         setScannedData({
           barcode: cleanBarcode,
           brand: "Unregistered / Local Item",
           productName: `Scanned Product (${cleanBarcode})`,
-          ingredients: "This barcode is not yet indexed in the Open Food Facts or FSSAI database. Please verify the ingredients list directly on the product wrapper.",
+          ingredients: "This barcode is not yet indexed in the Open Food Facts database. Please review the ingredients label directly on the product packaging.",
           nutriscore: "C",
           healthScore: "3.0",
           icmrFlags: ["ℹ️ Unregistered Product: Database record pending. Inspect nutrition panel manually."],
@@ -157,7 +154,7 @@ export default function App() {
           <Text style={styles.productName}>{scannedData.productName}</Text>
           <Text style={styles.barcodeMeta}>Barcode ID: {scannedData.barcode}</Text>
           
-          {/* Rating Badges Row (Nutri-score A-E & Health Rating out of 5.0) */}
+          {/* Rating Badges Row */}
           <View style={styles.badgeRow}>
             <View style={styles.scoreCard}>
               <Text style={styles.scoreLabel}>Nutri-Score</Text>
@@ -179,10 +176,10 @@ export default function App() {
             </View>
           )}
 
-          {/* Detailed Chemical & Additive Breakdown */}
+          {/* Detailed Chemical & Additive Breakdown (INS Unmasker) */}
           {scannedData.additives.length > 0 && (
             <View style={styles.sectionBox}>
-              <Text style={styles.sectionHeader}>🧪 Detailed Chemical & Additive Breakdown:</Text>
+              <Text style={styles.sectionHeader}>🧪 INS & E-Code Additive Unmasker:</Text>
               {scannedData.additives.map((add: any, idx: number) => (
                 <View key={idx} style={styles.additiveCard}>
                   <View style={styles.additiveHeader}>

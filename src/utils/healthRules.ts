@@ -34,7 +34,16 @@ export const INS_DICTIONARY: Record<string, AdditiveDetail> = {
     risk: 'Moderate',
     description: 'Caramel color produced using ammonia and sulfite compounds, common in colas and dark beverages.',
     laymanExplanation: 'Contains trace processing byproducts monitored for long-term metabolic impact.',
-    icmrContext: 'Widely used in Indian soft drinks and dark beverages.'
+    icmrContext: 'Widely used in Indian soft drinks and dark beverages under FSSAI standards.'
+  },
+  '202': {
+    name: 'Potassium Sorbate',
+    eNumber: 'E202',
+    category: 'Chemical Preservative',
+    risk: 'Low',
+    description: 'Effective mold and yeast inhibitor used in dairy, baked goods, and beverages.',
+    laymanExplanation: 'Generally well-tolerated and metabolized safely by the human body.',
+    icmrContext: 'Permitted preservative within safe limits set by FSSAI.'
   },
   '211': {
     name: 'Sodium Benzoate',
@@ -44,6 +53,15 @@ export const INS_DICTIONARY: Record<string, AdditiveDetail> = {
     description: 'Broad-spectrum preservative used to prevent mold and bacterial growth in liquids and sauces.',
     laymanExplanation: 'Can form trace amounts of benzene if combined with Vitamin C (ascorbic acid) over time.',
     icmrContext: 'Strictly capped by FSSAI in fruit juices, jams, and squashes.'
+  },
+  '300': {
+    name: 'Ascorbic Acid (Vitamin C)',
+    eNumber: 'E300',
+    category: 'Antioxidant / Nutrient',
+    risk: 'Low',
+    description: 'Essential nutrient and antioxidant used to prevent oxidation and browning.',
+    laymanExplanation: 'Completely safe and beneficial vitamin supplement.',
+    icmrContext: 'Permitted and encouraged as a nutritional additive.'
   },
   '320': {
     name: 'Butylated Hydroxyanisole (BHA)',
@@ -62,6 +80,24 @@ export const INS_DICTIONARY: Record<string, AdditiveDetail> = {
     description: 'Natural fat derivative commonly sourced from soybeans or eggs to bind ingredients together.',
     laymanExplanation: 'Generally safe and well-tolerated by the human body.',
     icmrContext: 'Permitted widely as a safe natural food additive.'
+  },
+  '330': {
+    name: 'Citric Acid',
+    eNumber: 'E330',
+    category: 'Acidity Regulator',
+    risk: 'Low',
+    description: 'Natural organic acid found in citrus fruits, used to tart up flavor and preserve freshness.',
+    laymanExplanation: 'Safe natural acidifier present in lemons and oranges.',
+    icmrContext: 'Standard permitted food additive in India.'
+  },
+  '331': {
+    name: 'Sodium Citrates',
+    eNumber: 'E331',
+    category: 'Acidity Regulator / Buffer',
+    risk: 'Low',
+    description: 'Salt of citric acid used to control pH and tartness in beverages.',
+    laymanExplanation: 'Generally recognized as safe for daily consumption.',
+    icmrContext: 'Approved by FSSAI for beverages and packaged foods.'
   },
   '500': {
     name: 'Sodium Carbonates (Baking Soda)',
@@ -128,7 +164,7 @@ export const checkICMRGuidelines = (product: any) => {
     flags.push(`⚠️ High Sodium Content: ${sodium.toFixed(0)}mg/100g (ICMR warning cutoff: 500mg/100g)`);
   }
 
-  const ingredients = (product?.ingredients_text || '').toLowerCase();
+  const ingredients = (product?.ingredients_text || product?.ingredients_text_en || '').toLowerCase();
   if (ingredients.includes('palm oil') || ingredients.includes('palmolein')) {
     flags.push('🌴 Contains Palm Oil / Palmolein (High saturated fat source)');
   }
