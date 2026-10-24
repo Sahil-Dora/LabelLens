@@ -143,6 +143,22 @@ export const decodeAdditive = (tag: string): AdditiveDetail => {
   );
 };
 
+export const isNonFoodProduct = (product: any): boolean => {
+  const categories = (product?.categories || product?.categories_tags || []).join(' ').toLowerCase();
+  const name = (product?.product_name || product?.generic_name || '').toLowerCase();
+  
+  const nonFoodKeywords = [
+    'shampoo', 'soap', 'detergent', 'toothpaste', 'cosmetic', 'lotion', 
+    'battery', 'electronic', 'toy', 'cleaner', 'deodorant', 'perfume', 
+    'cream', 'moisturizer', 'facewash', 'hair color'
+  ];
+
+  const matchesKeyword = nonFoodKeywords.some(kw => name.includes(kw) || categories.includes(kw));
+  const isFoodOrBeverage = categories.includes('food') || categories.includes('beverage') || categories.includes('snack') || categories.includes('drink');
+
+  return matchesKeyword && !isFoodOrBeverage;
+};
+
 export const checkICMRGuidelines = (product: any, ingredientsText: string = '') => {
   const flags: string[] = [];
   const nutriments = product?.nutriments || {};
@@ -224,19 +240,19 @@ export const checkAllergenProfile = (product: any, ingredientsText: string = '',
   const nutriments = product?.nutriments || {};
   const sugar = nutriments['sugars_100g'] || 0;
 
-  if (profile === 'Diabetic-Friendly' && (sugar > 5 || fullText.includes('sugar') || fullText.includes('syrup') || fullText.includes('aspartame'))) {
+  if (profile.includes('Diabetic') && (sugar > 5 || fullText.includes('sugar') || fullText.includes('syrup') || fullText.includes('aspartame'))) {
     warnings.push(`🔴 Diabetic Alert: Contains notable sugar (${sugar > 0 ? sugar.toFixed(1) + 'g/100g' : 'present'}) or sweeteners.`);
   }
-  if (profile === 'Vegan' && (fullText.includes('milk') || fullText.includes('butter') || fullText.includes('honey') || fullText.includes('whey') || fullText.includes('casein') || fullText.includes('ghee'))) {
+  if (profile.includes('Vegan') && (fullText.includes('milk') || fullText.includes('butter') || fullText.includes('honey') || fullText.includes('whey') || fullText.includes('casein') || fullText.includes('ghee'))) {
     warnings.push(`🔴 Vegan Alert: Contains dairy or animal-derived ingredients.`);
   }
-  if (profile === 'Jain' && (fullText.includes('onion') || fullText.includes('garlic') || fullText.includes('potato') || fullText.includes('carrot') || fullText.includes('ginger'))) {
+  if (profile.includes('Jain') && (fullText.includes('onion') || fullText.includes('garlic') || fullText.includes('potato') || fullText.includes('carrot') || fullText.includes('ginger'))) {
     warnings.push(`🔴 Jain Alert: Contains root vegetables, onion, or garlic.`);
   }
-  if (profile === 'Gluten-Free' && (fullText.includes('wheat') || fullText.includes('maida') || fullText.includes('barley') || fullText.includes('malt'))) {
+  if (profile.includes('Gluten-Free') && (fullText.includes('wheat') || fullText.includes('maida') || fullText.includes('barley') || fullText.includes('malt'))) {
     warnings.push(`🔴 Gluten-Free Alert: Contains wheat, maida, or gluten derivatives.`);
   }
-  if (profile === 'Nut Allergy' && (fullText.includes('peanut') || fullText.includes('almond') || fullText.includes('cashew') || fullText.includes('nut') || fullText.includes('soy'))) {
+  if (profile.includes('Allergy') && (fullText.includes('peanut') || fullText.includes('almond') || fullText.includes('cashew') || fullText.includes('nut') || fullText.includes('soy'))) {
     warnings.push(`🔴 Allergen Alert: Contains peanuts, tree nuts, or soy.`);
   }
 
